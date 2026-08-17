@@ -13,6 +13,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "سلام! به ربات طلایار خوش اومدید 🌟\n\n"
         "دستورات موجود:\n"
         "/price - قیمت لحظه‌ای ارزهای دیجیتال\n"
+        "/gold - قیمت لحظه‌ای طلا و نقره\n"
         "/help - راهنما"
     )
 
@@ -37,11 +38,33 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("خطا در دریافت قیمت، لطفاً دوباره امتحان کنید.")
         logging.error(f"Price fetch error: {e}")
 
+async def gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        gold_response = requests.get("https://api.gold-api.com/price/XAU", timeout=10)
+        silver_response = requests.get("https://api.gold-api.com/price/XAG", timeout=10)
+
+        gold_data = gold_response.json()
+        silver_data = silver_response.json()
+
+        gold_price = gold_data["price"]
+        silver_price = silver_data["price"]
+
+        message = (
+            "🥇 قیمت لحظه‌ای فلزات (دلار، هر اونس):\n\n"
+            f"🟡 طلا: {gold_price:,.2f}$\n"
+            f"⚪ نقره: {silver_price:,.2f}$\n"
+        )
+        await update.message.reply_text(message)
+    except Exception as e:
+        await update.message.reply_text("خطا در دریافت قیمت طلا/نقره، لطفاً دوباره امتحان کنید.")
+        logging.error(f"Gold fetch error: {e}")
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "راهنمای ربات طلایار:\n\n"
         "/start - شروع\n"
         "/price - قیمت لحظه‌ای ارزها\n"
+        "/gold - قیمت لحظه‌ای طلا و نقره\n"
         "/help - همین راهنما"
     )
 
@@ -54,6 +77,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("price", price))
+    app.add_handler(CommandHandler("gold", gold))
     app.add_handler(CommandHandler("help", help_command))
 
     app.run_polling()
