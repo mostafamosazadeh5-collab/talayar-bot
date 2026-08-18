@@ -9,6 +9,9 @@ logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ALERTS_FILE = "alerts.json"
+VIP_FILE = "vip_users.json"
+
+FREE_ALERT_LIMIT = 1
 
 COIN_MAP = {
     "BTC": "bitcoin",
@@ -16,15 +19,32 @@ COIN_MAP = {
     "USDT": "tether",
 }
 
-def load_alerts():
-    if os.path.exists(ALERTS_FILE):
-        with open(ALERTS_FILE, "r") as f:
+# ---------- Helper functions ----------
+
+def load_json(path):
+    if os.path.exists(path):
+        with open(path, "r") as f:
             return json.load(f)
     return []
 
+def save_json(path, data):
+    with open(path, "w") as f:
+        json.dump(data, f)
+
+def load_alerts():
+    return load_json(ALERTS_FILE)
+
 def save_alerts(alerts):
-    with open(ALERTS_FILE, "w") as f:
-        json.dump(alerts, f)
+    save_json(ALERTS_FILE, alerts)
+
+def load_vips():
+    return load_json(VIP_FILE)
+
+def is_vip(chat_id):
+    vips = load_vips()
+    return chat_id in vips
+
+# ---------- Commands ----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -34,6 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/gold - قیمت لحظه‌ای طلا و نقره\n"
         "/alert - تنظیم هشدار قیمت\n"
         "/myalerts - مشاهده هشدارهای من\n"
+        "/vip - اطلاعات اشتراک VIP\n"
         "/help - راهنما"
     )
 
@@ -80,7 +101,9 @@ async def gold(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.error(f"Gold fetch error: {e}")
 
 async def alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     args = context.args
+
     if len(args) != 2:
         await update.message.reply_text(
             "فرمت درست:\n/alert BTC 70000\n\n"
@@ -100,8 +123,17 @@ async def alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     alerts = load_alerts()
+    user_alert_count = len([a for a in alerts if a["chat_id"] == chat_id])
+
+    if not is_vip(chat_id) and user_alert_count >= FREE_ALERT_LIMIT:
+        await update.message.reply_text(
+            f"⚠️ در نسخه‌ی رایگان فقط می‌تونید {FREE_ALERT_LIMIT} هشدار فعال داشته باشید.\n\n"
+            "برای هشدار نامحدود و امکانات بیشتر، دستور /vip رو بزنید 🌟"
+        )
+        return
+
     alerts.append({
-        "chat_id": update.effective_chat.id,
+        "chat_id": chat_id,
         "coin": coin_symbol,
         "target_price": target_price,
     })
@@ -124,6 +156,26 @@ async def myalerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for a in user_alerts:
         message += f"• {a['coin']} → {a['target_price']:,}$\n"
 
+    await update.message.reply_text(message)
+
+async def vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    if is_vip(chat_id):
+        await update.message.reply_text("🌟 شما عضو VIP هستید! از همه‌ی امکانات لذت ببرید.")
+        return
+
+    message = (
+        "🌟 اشتراک VIP طلایار 🌟\n\n"
+        "با ارتقا به VIP از این امکانات بهره‌مند میشید:\n\n"
+        "🔔 هشدار قیمت نامحدود\n"
+        "📊 گزارش خودکار روزانه بازار\n"
+        "📈 هشدار بر اساس درصد نوسان\n"
+        "🎯 پشتیبانی اولویت‌دار\n"
+        "📚 آموزش پایه تحلیل تکنیکال\n"
+        "📢 دسترسی به کانال خصوصی تحلیل\n\n"
+        "برای خرید اشتراک، با پشتیبانی در ارتباط باشید:\n"
+        "👉 @WAHL4"
+    )
     await update.message.reply_text(message)
 
 async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
@@ -164,8 +216,40 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/gold - قیمت لحظه‌ای طلا و نقره\n"
         "/alert BTC 70000 - تنظیم هشدار قیمت\n"
         "/myalerts - مشاهده هشدارهای من\n"
+        "/vip - اطلاعات اشتراک VIP\n"
         "/help - همین راهنما"
     )
+
+# ---------- Admin-only: manually add VIP ----------
+
+ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID")
+
+async def addvip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    if str(chat_id) != str(ADMIN_CHAT_ID):
+        return
+
+    if len(context.args) != 1:
+        await update.message.reply_text("فرمت: /addvip CHAT_ID")
+        return
+
+    try:
+        target_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("CHAT_ID باید عدد باشه.")
+        return
+
+    vips = load_vips()
+    if target_id not in vips:
+        vips.append(target_id)
+        save_json(VIP_FILE, vips)
+
+    await update.message.reply_text(f"✅ کاربر {target_id} به VIP اضافه شد.")
+
+async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"چت آیدی شما: {update.effective_chat.id}")
+
+# ---------- Main ----------
 
 def main():
     if not BOT_TOKEN:
@@ -179,7 +263,10 @@ def main():
     app.add_handler(CommandHandler("gold", gold))
     app.add_handler(CommandHandler("alert", alert))
     app.add_handler(CommandHandler("myalerts", myalerts))
+    app.add_handler(CommandHandler("vip", vip))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("addvip", addvip))
+    app.add_handler(CommandHandler("myid", myid))
 
     app.job_queue.run_repeating(check_alerts, interval=300, first=10)
 
