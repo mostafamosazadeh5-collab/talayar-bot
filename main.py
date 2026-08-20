@@ -2,6 +2,8 @@ import os
 import json
 import logging
 import requests
+from datetime import time
+import pytz
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -10,8 +12,10 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 ALERTS_FILE = "alerts.json"
 VIP_FILE = "vip_users.json"
+DAILY_FILE = "daily_subs.json"
 
 FREE_ALERT_LIMIT = 1
+IRAN_TZ = pytz.timezone("Asia/Tehran")
 
 COIN_MAP = {
     "BTC": "bitcoin",
@@ -44,6 +48,36 @@ def is_vip(chat_id):
     vips = load_vips()
     return chat_id in vips
 
+def load_daily_subs():
+    return load_json(DAILY_FILE)
+
+def save_daily_subs(subs):
+    save_json(DAILY_FILE, subs)
+
+# ---------- Shared price fetch ----------
+
+def fetch_market_summary():
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether&vs_currencies=usd"
+    response = requests.get(url, timeout=10)
+    data = response.json()
+    btc = data["bitcoin"]["usd"]
+    eth = data["ethereum"]["usd"]
+    usdt = data["tether"]["usd"]
+
+    gold_response = requests.get("https://api.gold-api.com/price/XAU", timeout=10)
+    silver_response = requests.get("https://api.gold-api.com/price/XAG", timeout=10)
+    gold_price = gold_response.json()["price"]
+    silver_price = silver_response.json()["price"]
+
+    return (
+        "📊 قیمت لحظه‌ای ارزها (دلار):\n\n"
+        f"₿ بیت‌کوین: {btc:,}$\n"
+        f"Ξ اتریوم: {eth:,}$\n"
+        f"₮ تتر: {usdt}$\n"
+        f"🟡 طلا: {gold_price:,.2f}$\n"
+        f"⚪ نقره: {silver_price:,.2f}$\n"
+    )
+
 # ---------- Commands ----------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -54,6 +88,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/gold - قیمت لحظه‌ای طلا و نقره\n"
         "/alert - تنظیم هشدار قیمت\n"
         "/myalerts - مشاهده هشدارهای من\n"
+        "/dailyreport - فعال/غیرفعال کردن گزارش روزانه (ویژه VIP)\n"
         "/vip - اطلاعات اشتراک VIP\n"
         "/help - راهنما"
     )
@@ -158,10 +193,45 @@ async def myalerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(message)
 
+async def dailyreport(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+
+    if not is_vip(chat_id):
+        await update.message.reply_text(
+            "📊 گزارش خودکار روزانه یک امکان ویژه‌ی VIP هست.\n\n"
+            "برای فعال‌سازی، دستور /vip رو بزنید 🌟"
+        )
+        return
+
+    args = context.args
+    if not args or args[0].lower() not in ["on", "off"]:
+        await update.message.reply_text(
+            "فرمت درست:\n"
+            "/dailyreport on - فعال‌سازی گزارش روزانه (ساعت ۹ صبح)\n"
+            "/dailyreport off - غیرفعال‌سازی"
+        )
+        return
+
+    subs = load_daily_subs()
+
+    if args[0].lower() == "on":
+        if chat_id not in subs:
+            subs.append(chat_id)
+            save_daily_subs(subs)
+        await update.message.reply_text("✅ گزارش خودکار روزانه فعال شد! هر روز ساعت ۹ صبح براتون ارسال میشه.")
+    else:
+        if chat_id in subs:
+            subs.remove(chat_id)
+            save_daily_subs(subs)
+        await update.message.reply_text("❌ گزارش خودکار روزانه غیرفعال شد.")
+
 async def vip(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     if is_vip(chat_id):
-        await update.message.reply_text("🌟 شما عضو VIP هستید! از همه‌ی امکانات لذت ببرید.")
+        await update.message.reply_text(
+            "🌟 شما عضو VIP هستید!\n\n"
+            "برای فعال‌سازی گزارش خودکار روزانه:\n/dailyreport on"
+        )
         return
 
     message = (
@@ -208,6 +278,25 @@ async def check_alerts(context: ContextTypes.DEFAULT_TYPE):
 
     save_alerts(remaining_alerts)
 
+async def send_daily_reports(context: ContextTypes.DEFAULT_TYPE):
+    subs = load_daily_subs()
+    if not subs:
+        return
+
+    try:
+        summary = fetch_market_summary()
+    except Exception as e:
+        logging.error(f"Daily report fetch error: {e}")
+        return
+
+    message = "☀️ گزارش صبحگاهی بازار\n\n" + summary
+
+    for chat_id in subs:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=message)
+        except Exception as e:
+            logging.error(f"Send daily report error to {chat_id}: {e}")
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "راهنمای ربات طلایار:\n\n"
@@ -216,6 +305,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/gold - قیمت لحظه‌ای طلا و نقره\n"
         "/alert BTC 70000 - تنظیم هشدار قیمت\n"
         "/myalerts - مشاهده هشدارهای من\n"
+        "/dailyreport on|off - گزارش خودکار روزانه (VIP)\n"
         "/vip - اطلاعات اشتراک VIP\n"
         "/help - همین راهنما"
     )
@@ -263,12 +353,14 @@ def main():
     app.add_handler(CommandHandler("gold", gold))
     app.add_handler(CommandHandler("alert", alert))
     app.add_handler(CommandHandler("myalerts", myalerts))
+    app.add_handler(CommandHandler("dailyreport", dailyreport))
     app.add_handler(CommandHandler("vip", vip))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("addvip", addvip))
     app.add_handler(CommandHandler("myid", myid))
 
     app.job_queue.run_repeating(check_alerts, interval=300, first=10)
+    app.job_queue.run_daily(send_daily_reports, time=time(hour=9, minute=0, tzinfo=IRAN_TZ))
 
     app.run_polling()
 
