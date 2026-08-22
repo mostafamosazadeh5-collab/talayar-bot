@@ -37,15 +37,18 @@ def format_price(item): if not item: return “اطلاعات موجود نیس�
     icon = "⬆️" if change >= 0 else "⬇️"
 
     return (
-        f"{item['name']}:\n"
-        f"{item['price']:,} {item['unit']}\n"
-        f"{icon} {change}%\n"
-    )
+        f"{item.get('name')}:
+
+” f”{int(float(item.get(‘price’))):,} {item.get(‘unit’)} ” f”{icon}
+{change}% ” )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-await update.message.reply_text( “🟡 طلایارهوشمند رصد قیمت طلا، ارز و
-بازارهای مالیاز گزینه‌ها را انتخاب کنید:”, reply_markup=main_menu(),
-parse_mode=“HTML” )
+await update.message.reply_text( “🟡 طلایار
+
+دستیار هوشمند رصد قیمت طلا، ارز و بازارهای مالی
+
+یکی از گزینه‌ها را انتخاب کنید:“, reply_markup=main_menu(),
+parse_mode=”HTML” )
 
 async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 query = update.callback_query await query.answer()
@@ -54,35 +57,29 @@ query = update.callback_query await query.answer()
 
     if data == "home":
         await query.edit_message_text(
-            "🟡 <b>طلایار</b>\n\nمنوی اصلی:",
-            reply_markup=main_menu(),
-            parse_mode="HTML"
-        )
+            "🟡 <b>طلایار</b>
+
+منوی اصلی:“, reply_markup=main_menu(), parse_mode=”HTML” )
 
     elif data == "prices":
         await query.edit_message_text(
-            "📊 قیمت لحظه‌ای\n\nبازار مورد نظر را انتخاب کنید:",
-            reply_markup=price_menu()
-        )
+            "📊 قیمت لحظه‌ای
+
+بازار مورد نظر را انتخاب کنید:“, reply_markup=price_menu() )
 
     elif data == "gold":
         market = get_market_data()
 
         if market:
             text = (
-                "🪙 <b>بازار طلا و سکه</b>\n\n"
-                + format_price(find_item(market, "IR_GOLD_18K"))
-                + "\n"
-                + format_price(find_item(market, "IR_GOLD_24K"))
-                + "\n"
-                + format_price(find_item(market, "IR_COIN_EMAMI"))
-                + "\n"
-                + format_price(find_item(market, "IR_COIN_HALF"))
-                + "\n"
-                + format_price(find_item(market, "IR_COIN_QUARTER"))
-            )
-        else:
-            text = "خطا در دریافت اطلاعات بازار"
+                "🪙 <b>بازار طلا و سکه</b>
+
+” + format_price(find_item(market, “IR_GOLD_18K”)) + ” ” +
+format_price(find_item(market, “IR_GOLD_24K”)) + ” ” +
+format_price(find_item(market, “IR_COIN_EMAMI”)) + ” ” +
+format_price(find_item(market, “IR_COIN_HALF”)) + ” ” +
+format_price(find_item(market, “IR_COIN_QUARTER”)) ) else: text = “خطا
+در دریافت اطلاعات بازار”
 
         await query.edit_message_text(
             text,
@@ -92,33 +89,45 @@ query = update.callback_query await query.answer()
 
     elif data == "iran_currency":
         await query.edit_message_text(
-            "💵 بخش ارز در مرحله بعد متصل می‌شود.",
+            "💵 بازار ارز در مرحله بعد متصل می‌شود.",
             reply_markup=price_menu()
         )
 
     elif data == "ounce":
         await query.edit_message_text(
-            "🌎 بخش انس جهانی در مرحله بعد متصل می‌شود.",
+            "🌎 انس جهانی در مرحله بعد متصل می‌شود.",
             reply_markup=price_menu()
         )
 
     elif data == "crypto":
         await query.edit_message_text(
-            "₿ بخش ارز دیجیتال در مرحله بعد متصل می‌شود.",
+            "₿ ارز دیجیتال در مرحله بعد متصل می‌شود.",
             reply_markup=price_menu()
         )
 
     elif data == "alerts":
-        await query.edit_message_text("🔔 بخش هشدار قیمت در حال توسعه است.", reply_markup=main_menu())
+        await query.edit_message_text(
+            "🔔 بخش هشدار قیمت در حال توسعه است.",
+            reply_markup=main_menu()
+        )
 
     elif data == "account":
-        await query.edit_message_text("👤 حساب کاربری در حال توسعه است.", reply_markup=main_menu())
+        await query.edit_message_text(
+            "👤 حساب کاربری در حال توسعه است.",
+            reply_markup=main_menu()
+        )
 
     elif data == "vip":
-        await query.edit_message_text("⭐ بخش VIP در حال توسعه است.", reply_markup=main_menu())
+        await query.edit_message_text(
+            "⭐ بخش VIP در حال توسعه است.",
+            reply_markup=main_menu()
+        )
 
     elif data == "help":
-        await query.edit_message_text("ℹ️ راهنمای طلایار.", reply_markup=main_menu())
+        await query.edit_message_text(
+            "ℹ️ راهنمای طلایار.",
+            reply_markup=main_menu()
+        )
 
 def run(): if not BOT_TOKEN: raise ValueError(“BOT_TOKEN تنظیم نشده
 است”)
