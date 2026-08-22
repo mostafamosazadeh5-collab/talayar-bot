@@ -69,7 +69,11 @@ def fetch_brsapi():
         raise RuntimeError("BRSAPI_KEY not set")
     url = f"https://Api.BrsApi.ir/Market/Gold_Currency.php?key={BRSAPI_KEY}"
     r = requests.get(url, timeout=10)
-    return r.json()
+    data = r.json()
+    if "gold" not in data or "currency" not in data:
+        logging.error(f"brsapi unexpected response: {data}")
+        raise RuntimeError("brsapi invalid response (check BRSAPI_KEY)")
+    return data
 
 def find_symbol(items, symbol):
     for item in items:
@@ -118,6 +122,9 @@ def build_goldcoin_toman_text():
     if quarter:
         lines.append(f"🪙 ربع سکه: {quarter['price']:,} تومان")
 
+    if len(lines) == 1:
+        raise RuntimeError("no gold/coin symbols matched in brsapi response")
+
     return "\n".join(lines) + "\n"
 
 def build_currency_toman_text():
@@ -130,6 +137,9 @@ def build_currency_toman_text():
         item = find_symbol(currency_list, symbol)
         if item:
             lines.append(f"💴 {label}: {item['price']:,} تومان")
+
+    if len(lines) == 1:
+        raise RuntimeError("no currency symbols matched in brsapi response")
 
     return "\n".join(lines) + "\n"
 
